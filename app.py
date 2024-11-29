@@ -31,7 +31,18 @@ def fetch_data():
 # Load and preprocess data
 df = fetch_data()
 
-# Navbar (simplified, clean design)
+# Limit chains and protocols to specified options
+valid_chains = ["Arbitrum", "Avalanche", "Base", "BNB", "Ethereum", "Optimism", "Polygon", "Solana"]
+valid_protocols = [
+    "aave-v2", "aave-v3", "aerodrome-v1", "aerodrome-v2", "convex-finance", "orca",
+    "pancakeswap-amm", "pancakeswap-amm-v3", "pendle", "quickswap-dex", "sushiswap",
+    "uniswap-v2", "uniswap-v3", "velodrome-v2", "yearn-finance", "yldr"
+]
+df = df[df["Chain"].isin(valid_chains)]
+df = df[df["Protocol"].isin(valid_protocols)]
+df = df.sort_values(by="Vora Score", ascending=False)
+
+# Navbar
 navbar = dbc.NavbarSimple(
     brand="CLP Dashboard",
     brand_style={"font-size": "1.5em", "font-weight": "bold"},
@@ -43,6 +54,15 @@ navbar = dbc.NavbarSimple(
 app.layout = dbc.Container([
     navbar,  # Navbar at the top
 
+    # Portfolio Analysis Section at the Top
+    dbc.Card([
+        dbc.CardHeader("Portfolio Analysis"),
+        dbc.CardBody([
+            html.Div(id="portfolio-stats", className="mb-3"),
+            html.Div(id="portfolio-table")
+        ]),
+    ], className="mb-4"),
+
     # Filters Section
     dbc.Card([
         dbc.CardHeader("Filters"),
@@ -52,30 +72,28 @@ app.layout = dbc.Container([
                     html.Label("Chain", style={"font-size": "1em"}),
                     dcc.Dropdown(
                         id="chain-filter",
-                        options=[{"label": chain, "value": chain} for chain in df["Chain"].unique()],
+                        options=[{"label": chain, "value": chain} for chain in valid_chains],
                         multi=True,
-                        style={"color": "black"}  # Dropdown text color
+                        style={"color": "black"}
                     )
-                ], width=4),
+                ], width=3),
                 dbc.Col([
                     html.Label("Protocol", style={"font-size": "1em"}),
                     dcc.Dropdown(
                         id="protocol-filter",
-                        options=[{"label": protocol, "value": protocol} for protocol in df["Protocol"].unique()],
+                        options=[{"label": protocol, "value": protocol} for protocol in valid_protocols],
                         multi=True,
-                        style={"color": "black"}  # Dropdown text color
+                        style={"color": "black"}
                     )
-                ], width=4),
-            ]),
-            dbc.Row([
+                ], width=3),
                 dbc.Col([
                     html.Label("Min TVL (USD)", style={"font-size": "1em"}),
                     dcc.Input(id="tvl-filter", type="number", value=800000)
-                ], width=4),
+                ], width=3),
                 dbc.Col([
                     html.Label("Min APY (%)", style={"font-size": "1em"}),
                     dcc.Input(id="apy-filter", type="number", value=5)
-                ], width=4),
+                ], width=3),
             ], className="mt-3"),
         ]),
     ], className="mb-4"),
@@ -103,18 +121,9 @@ app.layout = dbc.Container([
             filter_action="native",
         )),
     ], className="mb-4"),
-
-    # Portfolio Analysis Section
-    dbc.Card([
-        dbc.CardHeader("Portfolio Analysis"),
-        dbc.CardBody([
-            html.Div(id="portfolio-stats", className="mb-3"),
-            html.Div(id="portfolio-table")
-        ]),
-    ], className="mb-4"),
 ], fluid=True)
 
-# Callbacks for filtering and portfolio selection
+# Callbacks
 @app.callback(
     Output("lp-table", "data"),
     [
@@ -137,6 +146,48 @@ def update_results(chain_filter, protocol_filter, tvl_filter, apy_filter):
         filtered_df = filtered_df[filtered_df["APY (%)"] >= apy_filter]
 
     return filtered_df.to_dict("records")
+
+
+@app.callback(
+    [Output("portfolio-stats", "children"),
+     Output("portfolio-table", "children")],
+    Input("lp-table", "selected_rows"),
+    State("lp-table", "data")
+)
+def update_portfolio(selected_rows, table_data):
+    if not selected_rows:
+        return html.P("No LPs selected."), None
+
+    # Get selected LPs
+    selected_df = pd.DataFrame(table_data).iloc[selected_rows]
+
+    # Aggregate statistics
+    avg_tvl = selected_df["TVL (USD)"].mean()
+    avg_apy = selected_df["APY (%)"].mean()
+    avg_vora = selected_df["Vora Score"].mean()
+
+    portfolio_stats = html.Div([
+        html.P(f"Average TVL: ${avg_tvl:,.0f}"),
+        html.P(f"Average APY: {avg_apy:.2f}%"),
+        html.P(f"Average Vora Score: {avg_vora:.0f}")
+    ])
+
+    # Portfolio Table
+    portfolio_table = dash_table.DataTable(
+        columns=[
+            {"name": "Symbol", "id": "Symbol"},
+            {"name": "Chain", "id": "Chain"},
+            {"name": "Protocol", "id": "Protocol"},
+            {"name": "TVL (USD)", "id": "TVL (USD)"},
+            {"name": "APY (%)", "id": "APY (%)"},
+            {"name": "Vora Score", "id": "Vora Score"}
+        ],
+        data=selected_df.to_dict("records"),
+        style_table={"overflowX": "auto"},
+        style_cell={"backgroundColor": "#222", "color": "white"}
+    )
+
+    return portfolio_stats, portfolio_table
 
 
 if __name__ == "__main__":
