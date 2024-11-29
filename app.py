@@ -222,7 +222,6 @@ def update_portfolio(data, selected_rows, portfolio_data):
 
     return portfolio_df.to_dict("records"), portfolio_stats, portfolio_table
 
-
 # Run app
 if __name__ == "__main__":
-    app.run_server(debug=False)
+    app.run_server(host="0.0.0.0", port=8080, debug=False)
