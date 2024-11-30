@@ -68,6 +68,7 @@ app.layout = dbc.Container([
         dbc.CardHeader("Filters"),
         dbc.CardBody([
             dbc.Row([
+                # Chain Filter
                 dbc.Col([
                     html.Label("Chain", style={"font-size": "1em"}),
                     dcc.Dropdown(
@@ -76,7 +77,9 @@ app.layout = dbc.Container([
                         multi=True,
                         style={"color": "black"}
                     )
-                ], width=3),
+                ], width=2),
+
+                # Protocol Filter
                 dbc.Col([
                     html.Label("Protocol", style={"font-size": "1em"}),
                     dcc.Dropdown(
@@ -85,15 +88,51 @@ app.layout = dbc.Container([
                         multi=True,
                         style={"color": "black"}
                     )
-                ], width=3),
+                ], width=2),
+
+                # Token 1 Filter
                 dbc.Col([
-                    html.Label("Min TVL (USD)", style={"font-size": "1em"}),
-                    dcc.Input(id="tvl-filter", type="number", value=800000)
-                ], width=3),
+                    html.Label("Token 1", style={"font-size": "1em"}),
+                    dcc.Input(
+                        id="token1-filter",
+                        type="text",
+                        placeholder="Search Token 1",
+                        style={"color": "black"}
+                    )
+                ], width=2),
+
+                # Token 2 Filter
                 dbc.Col([
-                    html.Label("Min APY (%)", style={"font-size": "1em"}),
-                    dcc.Input(id="apy-filter", type="number", value=5)
-                ], width=3),
+                    html.Label("Token 2", style={"font-size": "1em"}),
+                    dcc.Input(
+                        id="token2-filter",
+                        type="text",
+                        placeholder="Search Token 2",
+                        style={"color": "black"}
+                    )
+                ], width=2),
+
+                # Min TVL Filter
+                dbc.Col([
+                    html.Label("Min TVL", style={"font-size": "1em"}),
+                    dcc.Input(
+                        id="tvl-filter",
+                        type="number",
+                        value=800000,
+                        style={"color": "black"}
+                    )
+                ], width=2),
+
+                # Min APY Filter
+                dbc.Col([
+                    html.Label("Min APY", style={"font-size": "1em"}),
+                    dcc.Input(
+                        id="apy-filter",
+                        type="number",
+                        value=5,
+                        style={"color": "black"}
+                    )
+                ], width=2),
             ], className="mt-3"),
         ]),
     ], className="mb-4"),
@@ -123,71 +162,35 @@ app.layout = dbc.Container([
     ], className="mb-4"),
 ], fluid=True)
 
-# Callbacks
+# Callbacks for filtering and portfolio selection
 @app.callback(
     Output("lp-table", "data"),
     [
         Input("chain-filter", "value"),
         Input("protocol-filter", "value"),
+        Input("token1-filter", "value"),
+        Input("token2-filter", "value"),
         Input("tvl-filter", "value"),
         Input("apy-filter", "value"),
     ]
 )
-def update_results(chain_filter, protocol_filter, tvl_filter, apy_filter):
+def update_results(chain_filter, protocol_filter, token1_filter, token2_filter, tvl_filter, apy_filter):
     filtered_df = df.copy()
 
     if chain_filter:
         filtered_df = filtered_df[filtered_df["Chain"].isin(chain_filter)]
     if protocol_filter:
         filtered_df = filtered_df[filtered_df["Protocol"].isin(protocol_filter)]
+    if token1_filter:
+        filtered_df = filtered_df[filtered_df["Symbol"].str.contains(token1_filter, case=False, na=False)]
+    if token2_filter:
+        filtered_df = filtered_df[filtered_df["Symbol"].str.contains(token2_filter, case=False, na=False)]
     if tvl_filter:
         filtered_df = filtered_df[filtered_df["TVL (USD)"] >= tvl_filter]
     if apy_filter:
         filtered_df = filtered_df[filtered_df["APY (%)"] >= apy_filter]
 
     return filtered_df.to_dict("records")
-
-
-@app.callback(
-    [Output("portfolio-stats", "children"),
-     Output("portfolio-table", "children")],
-    Input("lp-table", "selected_rows"),
-    State("lp-table", "data")
-)
-def update_portfolio(selected_rows, table_data):
-    if not selected_rows:
-        return html.P("No LPs selected."), None
-
-    # Get selected LPs
-    selected_df = pd.DataFrame(table_data).iloc[selected_rows]
-
-    # Aggregate statistics
-    avg_tvl = selected_df["TVL (USD)"].mean()
-    avg_apy = selected_df["APY (%)"].mean()
-    avg_vora = selected_df["Vora Score"].mean()
-
-    portfolio_stats = html.Div([
-        html.P(f"Average TVL: ${avg_tvl:,.0f}"),
-        html.P(f"Average APY: {avg_apy:.2f}%"),
-        html.P(f"Average Vora Score: {avg_vora:.0f}")
-    ])
-
-    # Portfolio Table
-    portfolio_table = dash_table.DataTable(
-        columns=[
-            {"name": "Symbol", "id": "Symbol"},
-            {"name": "Chain", "id": "Chain"},
-            {"name": "Protocol", "id": "Protocol"},
-            {"name": "TVL (USD)", "id": "TVL (USD)"},
-            {"name": "APY (%)", "id": "APY (%)"},
-            {"name": "Vora Score", "id": "Vora Score"}
-        ],
-        data=selected_df.to_dict("records"),
-        style_table={"overflowX": "auto"},
-        style_cell={"backgroundColor": "#222", "color": "white"}
-    )
-
-    return portfolio_stats, portfolio_table
 
 
 if __name__ == "__main__":
